@@ -38,6 +38,15 @@ class UserTaskSerializer(serializers.ModelSerializer):
     app_name = serializers.CharField(source="app.name", read_only=True)
     points = serializers.CharField(source="app.points", read_only=True)
 
+
     class Meta:
         model = UserTask
         fields = ['id', 'user_id', 'app_id', 'app_name', 'completed', 'screenshot','points']
+
+
+
+
+
+
+
+

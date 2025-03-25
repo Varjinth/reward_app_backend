@@ -23,3 +23,6 @@ class UserTask(models.Model):
     app = models.ForeignKey(App, on_delete=models.CASCADE)
     screenshot = models.ImageField(upload_to="screenshots/")
     completed = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ("user", "app")

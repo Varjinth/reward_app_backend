@@ -20,7 +20,7 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
-            
+
             return Response({"message": "User registered successfully"}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -30,7 +30,7 @@ class LoginView(APIView):
         email = request.data.get("email")
         password = request.data.get("password")
         print(request.data)
-        
+
 
         user = authenticate(username=email, password=password)
         if user:
@@ -41,36 +41,37 @@ class LoginView(APIView):
                 "role": user.role,
             })
             response.set_cookie(
-                key="access_token", 
+                key="access_token",
                 value=str(refresh.access_token),
-                httponly=True, 
-                secure=False,    
-                samesite="Lax"
+                httponly=True,
+                secure=True,
+                samesite="None"
             )
             response.set_cookie(
-                key="refresh_token", 
+                key="refresh_token",
                 value=str(refresh),
-                httponly=True, 
-                secure=False,    
-                samesite="Lax"
+                httponly=True,
+                secure=True,
+                samesite="None"
             )
             response.set_cookie(
-                key="role", 
+                key="role",
                 value=user.role,
-                httponly=False, 
-                secure=False,    
-                samesite="Lax"
+                httponly=True,
+                secure=True,
+                samesite="None"
             )
             return response
-         
+
         return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class LogoutView(APIView):
     def post(self, request):
         response = Response({"message": "Logout successful"})
-        response.delete_cookie("access_token")
-        response.delete_cookie("refresh_token")
+        response.delete_cookie("access_token", samesite="None")
+        response.delete_cookie("refresh_token", samesite="None")
+        response.delete_cookie("role", samesite="None")
         return response
 
 
@@ -122,7 +123,7 @@ class UserTaskCreateAPIView(APIView):
 
     def post(self, request):
         app_id = request.data.get("app_id")
-        
+
         if not app_id:
             return Response({"error": "app_id is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
@@ -130,11 +131,18 @@ class UserTaskCreateAPIView(APIView):
         except App.DoesNotExist:
             return Response({"error": "Invalid app_id."}, status=status.HTTP_400_BAD_REQUEST)
 
+        existing_task = UserTask.objects.filter(user=request.user, app=app).first()
+        if existing_task:
+            return Response({"error": "You have already completed this task."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
         serializer = UserTaskSerializer(data=request.data)
+        print("i am printed")
         if serializer.is_valid():
             serializer.save(user=request.user, app=app, completed=True)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -145,7 +153,7 @@ class CompletedTasksView(APIView):
     def get(self, request):
         """Fetch completed tasks for the logged-in user."""
         completed_tasks = UserTask.objects.filter(user=request.user, completed=True)
-        serializer = UserTaskSerializer(completed_tasks, many=True)
+        serializer = UserTaskSerializer(completed_tasks, many=True, context={"request": request})
         return Response(serializer.data)
 
 class PendingTasksView(APIView):
@@ -154,23 +162,23 @@ class PendingTasksView(APIView):
     def get(self, request):
         """Fetch pending tasks for the logged-in user by excluding completed ones."""
         completed_task_ids = UserTask.objects.filter(user=request.user, completed=True).values_list('app_id', flat=True)
-        
+
         # Get all apps but exclude those in completed tasks
         pending_tasks = App.objects.exclude(id__in=completed_task_ids)
         serializer = AppSerializer(pending_tasks, many=True)
-        
+
         return Response(serializer.data)
 
 class UserDetailsView(APIView):
     """Fetch user details including username and total points earned.
-    
+
     - If the user is an admin, return all users' details.
     - Otherwise, return only the requested user's details.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if request.user.role == 'admin': 
+        if request.user.role == 'admin':
             users_data = []
 
             users = User.objects.all()
@@ -184,7 +192,7 @@ class UserDetailsView(APIView):
                 })
                 users_data.sort(key=lambda x: x["points_earned"], reverse=True)
 
-            return Response(users_data) 
+            return Response(users_data)
 
         else:
             user = request.user
@@ -196,4 +204,4 @@ class UserDetailsView(APIView):
                 "points": total_points
             }
 
-            return Response(user_data) 
+            return Response(user_data)
